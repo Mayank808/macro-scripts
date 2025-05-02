@@ -4,6 +4,7 @@ import logging
 import time
 from pynput import mouse, keyboard
 from pynput.mouse import Button
+from pynput.keyboard import Key
 
 mouse_controller = mouse.Controller()
 
@@ -16,39 +17,52 @@ logging.basicConfig(
 
 print("[DEBUG] Mouse logger starting. Logging to terminal only.")
 
-# Global list to store click locations
+# Global list to store click locations and recording state
 click_locations = []
+recording = False
 
 def on_click(x, y, button, pressed):
-    if pressed:
+    global recording
+    if pressed and recording:
         click_locations.append((x, y))
         print(f"[INFO] Recorded click location #{len(click_locations)}: ({x}, {y})")
         logging.info(f"Recorded click location #{len(click_locations)}: ({x}, {y})")
 
 def on_press(key):
+    global recording, click_locations
+    if key == Key.esc:
+        if recording:
+            recording = False
+            print("[INFO] Recording stopped.")
+            logging.info("Recording stopped.")
+        return
     try:
-        if key.char.lower() == 'l':
-            if not click_locations:
-                print("[WARN] No click locations have been recorded yet.")
-                logging.warning("No click locations have been recorded yet.")
-                return
-            print("[INFO] 'l' key pressed. Executing pre-recorded clicks sequence.")
-            logging.info("Executing pre-recorded clicks sequence.")
-
-            for index, location in enumerate(click_locations, start=1):
-                mouse_controller.position = location
-                mouse_controller.click(Button.left)
-                print(f"[INFO] Clicked at {location} (Step {index}/{len(click_locations)})")
-                logging.info(f"Clicked at {location} (Step {index}/{len(click_locations)})")
-                time.sleep(0.5)  # delay between clicks
-
-            # Move back to the first location
-            mouse_controller.position = click_locations[0]
-            # Clear the list for new sequence recording
-            click_locations.clear()
+        char = key.char.lower()
     except AttributeError:
-        # Ignore special keys without a char attribute
-        pass
+        return
+
+    if char == 's':
+        recording = True
+        click_locations.clear()  # start fresh recording
+        print("[INFO] Recording started. Mouse clicks will now be recorded.")
+        logging.info("Recording started.")
+    elif char == 'l':
+        if not click_locations:
+            print("[WARN] No click locations have been recorded yet.")
+            logging.warning("No click locations have been recorded yet.")
+            return
+        print("[INFO] 'l' key pressed. Executing pre-recorded clicks sequence.")
+        logging.info("Executing pre-recorded clicks sequence.")
+        for index, location in enumerate(click_locations, start=1):
+            mouse_controller.position = location
+            mouse_controller.click(Button.left)
+            print(f"[INFO] Clicked at {location} (Step {index}/{len(click_locations)})")
+            logging.info(f"Clicked at {location} (Step {index}/{len(click_locations)})")
+            time.sleep(0.5)  # delay between clicks
+
+        # Move back to the first location
+        mouse_controller.position = click_locations[0]
+        # Optionally clear the list for new sequence recording
 
 if __name__ == "__main__":
     # Start the mouse listener thread
@@ -56,7 +70,7 @@ if __name__ == "__main__":
     mouse_listener.daemon = True
     mouse_listener.start()
 
-    # Start a keyboard listener thread to capture when the user presses "l"
+    # Start the keyboard listener thread to capture when the user presses keys
     keyboard_listener = keyboard.Listener(on_press=on_press)
     keyboard_listener.daemon = True
     keyboard_listener.start()
